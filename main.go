@@ -12,6 +12,7 @@ var (
 	test        []byte
 	detailsAddr int32
 	encrypted   int8
+	offset      int32 = 12
 )
 
 type Details struct {
@@ -49,8 +50,66 @@ type Details struct {
 	AppVersionC     int8
 }
 
+type GPSPoint struct {
+	Longitude float64
+	Latitude  float64
+	Accuracy  int32
+}
+
+type Message struct {
+}
+
+type CenterBattery struct {
+	RelativeCapacity int8
+	CurrentPV        int16
+	CurrentCapacity  int16
+	FullCapacity     int16
+	Life             int8
+	LoopNum          int16
+	ErrorType        int64
+	Current          int16
+	Voltages         [12]byte
+	Sn               int16
+	ProductDate      int16
+	Temperature      int16
+	ConnStatus       int8
+	TotalStudyCycle  int16
+	LastStudyCycle   int16
+}
+
+type OSDRaw struct {
+	Longitude         float64
+	Latitude          float64
+	Heigh             int16
+	XSpeed            int16
+	YSpeed            int16
+	ZSpeed            int16
+	Pitch             int16
+	Rool              int16
+	Yaw               int16
+	RcState           int8
+	AppCommand        int8
+	Info              int32
+	GpsNum            int8
+	FlightAction      int8
+	MotorFailedCause  int8
+	NonGpsCause       int8
+	WaypointLimitMode int8
+	Battery           int8
+	SwaveHeight       int8
+	FlyTime           int16
+	MotorRevolution   int8
+	_                 int16
+	FlycVersion       int8
+	DroneType         int8
+	IMUinitFailReason int8
+	MotorFailReason   int8
+	_                 int8
+	SDKCtrlDevice     int8
+}
+
 func main() {
-	path := "/home/seo/testv3.txt"
+	path := "test.txt"
 
 	file, err := os.Open(path)
 	if err != nil {
@@ -66,6 +125,7 @@ func main() {
 	if err != nil {
 		log.Fatal("binary.Read failed", err)
 	}
+	fmt.Printf("The file is %d bytes long\n", fi.Size())
 
 	//encrypted
 	err = binary.Read(bytes.NewBuffer(readNextBytes(file, 10, 1)), binary.LittleEndian, &encrypted)
@@ -85,26 +145,46 @@ func main() {
 	}
 
 	//1433907
-	fmt.Printf("The file is %d bytes long\n", fi.Size())
-	fmt.Printf("%d\n", detailsAddr)
-	fmt.Printf("%d\n", encrypted)
-	fmt.Printf("%+v\n", details)
-	fmt.Printf("Substreet: %s\n", details.SubStreet)
-	fmt.Printf("Street: %s\n", details.Street)
-	fmt.Printf("City: %s\n", details.City)
-	fmt.Printf("Area: %s\n", details.Area)
 	fmt.Printf("Longitude: %f\n", details.Longitude)
 	fmt.Printf("Latitude: %f\n", details.Latitude)
-	fmt.Printf("CameraSN: %s\n", details.CameraSn)
+
+	//	for offset < detailsAddr {
+	//		isFrame(file, int64(offset))
+	//		offset++
+	//	}
 }
 
 func readNextBytes(file *os.File, offset int64, lenght int) []byte {
 	bytes := make([]byte, lenght)
-
 	_, err := file.ReadAt(bytes, offset)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	return bytes
+}
+
+func isFrame(file *os.File, offset int64) {
+	tId := make([]byte, 1)
+	_, err := file.ReadAt(tId, offset+1)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	length := make([]byte, 1)
+	_, err2 := file.ReadAt(length, offset+2)
+	if err2 != nil {
+		log.Fatal(err2)
+	}
+
+	end := make([]byte, 1)
+	_, err3 := file.ReadAt(end, offset+int64(binary.LittleEndian.Uint64(length)))
+	if err3 != nil {
+		log.Fatal(err3)
+	}
+	fmt.Printf("id: %d, length: %d, end: %x", tId, length, end)
+}
+
+func extractFrame(file *os.File, offset int64) {
+
 }

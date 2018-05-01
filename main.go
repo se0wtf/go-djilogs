@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"math"
 	"os"
 )
 
@@ -13,6 +14,7 @@ var (
 	detailsAddr int32
 	encrypted   int8
 	offset      int32 = 12
+	types       []string
 )
 
 type Details struct {
@@ -108,8 +110,17 @@ type OSDRaw struct {
 	SDKCtrlDevice     int8
 }
 
+type Frame struct {
+	offset    int64
+	typeID    uint8
+	length    uint8
+	key       uint8
+	paylod    []byte
+	encrypted bool
+}
+
 func main() {
-	path := "test.txt"
+	path := "testv3.txt"
 
 	file, err := os.Open(path)
 	if err != nil {
@@ -120,12 +131,38 @@ func main() {
 
 	details := Details{}
 
+	// init types
+	types := make([]string, 256)
+	//types = append(types, "OSD", "HOME", "GIMBAL", "RC", "CUSTOM", "DEFORM", "CENTER_BATTERY", "SMART_BATTERY", "APP_TIP", "APP_WARN", "RC_GPS", "RC_DEBUG", "RECOVER", "APP_GPS", "FIRMWARE", "OFDM_DEBUG", "VISION_GROUP", "VISION_WARN", "MC_PARAM", "APP_OPERATION")
+	//types = []string{"OSD", "HOME", "GIMBAL", "RC", "CUSTOM", "DEFORM", "CENTER_BATTERY", "SMART_BATTERY", "APP_TIP", "APP_WARN", "RC_GPS", "RC_DEBUG", "RECOVER", "APP_GPS", "FIRMWARE", "OFDM_DEBUG", "VISION_GROUP", "VISION_WARN", "MC_PARAM", "APP_OPERATION"}
+	types[1] = "OSD"
+	types[2] = "HOME"
+	types[3] = "GIMBAL"
+	types[4] = "RC"
+	types[5] = "CUSTOM"
+	types[6] = "DEFORM"
+	types[7] = "CENTER_BATTERY"
+	types[8] = "SMART_BATTERY"
+	types[9] = "APP_TIP"
+	types[10] = "APP_WARN"
+	types[11] = "RC_GPS"
+	types[12] = "RC_DEBUG"
+	types[13] = "RECOVER"
+	types[14] = "APP_GPS"
+	types[15] = "FIRMWARE"
+	types[16] = "OFDM_DEBUG"
+	types[17] = "VISION_GROUP"
+	types[18] = "VISION_WARN"
+	types[19] = "MC_PARAM"
+	types[20] = "APP_OPERATION"
+	types[254] = "OTHER"
+	types[255] = "END"
+
 	//details addr
 	err = binary.Read(bytes.NewBuffer(readNextBytes(file, 0, 4)), binary.LittleEndian, &detailsAddr)
 	if err != nil {
 		log.Fatal("binary.Read failed", err)
 	}
-	fmt.Printf("The file is %d bytes long\n", fi.Size())
 
 	//encrypted
 	err = binary.Read(bytes.NewBuffer(readNextBytes(file, 10, 1)), binary.LittleEndian, &encrypted)
@@ -139,23 +176,18 @@ func main() {
 		log.Fatal("binary.Read failed", err)
 	}
 
-	fi, err := file.Stat()
-	if err != nil {
-		// Could not obtain stat, handle error
-	}
-
 	//1433907
 	fmt.Printf("Longitude: %f\n", details.Longitude)
 	fmt.Printf("Latitude: %f\n", details.Latitude)
 
-	//	for offset < detailsAddr {
-	//		isFrame(file, int64(offset))
-	//		offset++
-	//	}
+	for offset < detailsAddr {
+		isFrame(file, int64(offset), types)
+		offset++
+	}
 }
 
-func readNextBytes(file *os.File, offset int64, lenght int) []byte {
-	bytes := make([]byte, lenght)
+func readNextBytes(file *os.File, offset int64, length int) []byte {
+	bytes := make([]byte, length)
 	_, err := file.ReadAt(bytes, offset)
 	if err != nil {
 		log.Fatal(err)
@@ -164,27 +196,70 @@ func readNextBytes(file *os.File, offset int64, lenght int) []byte {
 	return bytes
 }
 
-func isFrame(file *os.File, offset int64) {
-	tId := make([]byte, 1)
-	_, err := file.ReadAt(tId, offset+1)
+func isFrame(file *os.File, offset int64, types []string) Frame {
+	var id uint8
+	var length uint8
+	var end uint8
+	var bytekey uint8
+	//var payload []byte
+	err := binary.Read(bytes.NewBuffer(readNextBytes(file, offset, 1)), binary.LittleEndian, &id)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("binary.Read failed", err)
 	}
 
-	length := make([]byte, 1)
-	_, err2 := file.ReadAt(length, offset+2)
-	if err2 != nil {
-		log.Fatal(err2)
+	err = binary.Read(bytes.NewBuffer(readNextBytes(file, offset+1, 1)), binary.LittleEndian, &length)
+	if err != nil {
+		log.Fatal("binary.Read failed", err)
 	}
 
-	end := make([]byte, 1)
-	_, err3 := file.ReadAt(end, offset+int64(binary.LittleEndian.Uint64(length)))
-	if err3 != nil {
-		log.Fatal(err3)
+	err = binary.Read(bytes.NewBuffer(readNextBytes(file, offset+2+int64(length), 1)), binary.LittleEndian, &end)
+	if err != nil {
+		log.Fatal("binary.Read failed", err)
 	}
-	fmt.Printf("id: %d, length: %d, end: %x", tId, length, end)
+
+	if id != 0 && end == 255 && types[id] != "" {
+		payload := make([]byte, length)
+		err = binary.Read(bytes.NewBuffer(readNextBytes(file, offset+3, int(length))), binary.LittleEndian, &payload)
+		if err != nil {
+			log.Fatal("binary.Read failed", err)
+		}
+
+		err = binary.Read(bytes.NewBuffer(readNextBytes(file, offset+3, 1)), binary.LittleEndian, &bytekey)
+		if err != nil {
+			log.Fatal("binary.Read failed", err)
+		}
+
+		f := Frame{offset: offset, typeID: id, length: length, paylod: payload, key: bytekey, encrypted: true}
+		if offset == 758928 {
+			fmt.Printf("> offset: %d, offsetEnd: %d, id: %d, length: %d, end: %d, type: %s\n", offset, offset+2+int64(length), id, int(length), end, types[id])
+			decryptFrame(f)
+		}
+		return f
+	}
+	return Frame{}
 }
 
-func extractFrame(file *os.File, offset int64) {
+// byteKey: 96, key: 211,100,182,13,217,83,205,34, id: 096, dataOffset: 758931, dataLength: 55
+func decryptFrame(f Frame) {
+	var tmpLong []byte
+	var decodecFloat float64
+	//keys := make([]byte, 16)
+	//keys := [][8]byte{{211, 100, 182, 13, 217, 83, 205, 34}}
+	keys := [8]byte{211, 100, 182, 13, 217, 83, 205, 34}
+	fmt.Printf("keys: %x\n", keys)
+	//var decoded byte
+	fmt.Printf("payload: %v\n", f.paylod)
+	tmpLong = f.paylod[0:8]
+	fmt.Printf("tmpLong: %v\n", tmpLong)
+	bs := make([]byte, 8)
+	for i, b := range tmpLong {
+		fmt.Printf("index: %d, byte: %b, key: %d, decodedByte: %d\n", i, b, keys[i], b^byte(keys[i]))
+		bs[i] = b ^ byte(keys[i])
+	}
+	if err := binary.Read(bytes.NewReader(bs), binary.LittleEndian, &decodecFloat); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("decoded: %v, float: %f\n", bs, decodecFloat*180/math.Pi)
+	//var long float64
 
 }

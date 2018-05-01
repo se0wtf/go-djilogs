@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"fmt"
 	"log"
 	"math"
 	"os"
+	"reflect"
 )
 
 var (
@@ -101,12 +103,12 @@ type OSDRaw struct {
 	SwaveHeight       int8
 	FlyTime           int16
 	MotorRevolution   int8
-	_                 int16
+	Useless           int16
 	FlycVersion       int8
 	DroneType         int8
 	IMUinitFailReason int8
 	MotorFailReason   int8
-	_                 int8
+	Useless2          int8
 	SDKCtrlDevice     int8
 }
 
@@ -115,7 +117,7 @@ type Frame struct {
 	typeID    uint8
 	length    uint8
 	key       uint8
-	paylod    []byte
+	payload   []byte
 	encrypted bool
 }
 
@@ -224,14 +226,15 @@ func isFrame(file *os.File, offset int64, types []string) Frame {
 			log.Fatal("binary.Read failed", err)
 		}
 
-		err = binary.Read(bytes.NewBuffer(readNextBytes(file, offset+3, 1)), binary.LittleEndian, &bytekey)
+		err = binary.Read(bytes.NewBuffer(readNextBytes(file, offset+2, 1)), binary.LittleEndian, &bytekey)
 		if err != nil {
 			log.Fatal("binary.Read failed", err)
 		}
 
-		f := Frame{offset: offset, typeID: id, length: length, paylod: payload, key: bytekey, encrypted: true}
+		f := Frame{offset: offset, typeID: id, length: length, payload: payload, key: bytekey, encrypted: true}
 		if offset == 758928 {
-			fmt.Printf("> offset: %d, offsetEnd: %d, id: %d, length: %d, end: %d, type: %s\n", offset, offset+2+int64(length), id, int(length), end, types[id])
+			//fmt.Printf("> offset: %d, offsetEnd: %d, id: %d, length: %d, end: %d, type: %s\n", offset, offset+2+int64(length), id, int(length), end, types[id])
+			fmt.Printf("> offset: %d, frame: %+v\n", offset, f)
 			decryptFrame(f)
 		}
 		return f
@@ -243,23 +246,63 @@ func isFrame(file *os.File, offset int64, types []string) Frame {
 func decryptFrame(f Frame) {
 	var tmpLong []byte
 	var decodecFloat float64
-	//keys := make([]byte, 16)
-	//keys := [][8]byte{{211, 100, 182, 13, 217, 83, 205, 34}}
-	keys := [8]byte{211, 100, 182, 13, 217, 83, 205, 34}
-	fmt.Printf("keys: %x\n", keys)
+	var decodecFloat2 float64
+	var osd OSDRaw
+	//fmt.Printf("len: %d\n", binary.Size(decodecFloat))
 	//var decoded byte
-	fmt.Printf("payload: %v\n", f.paylod)
-	tmpLong = f.paylod[0:8]
-	fmt.Printf("tmpLong: %v\n", tmpLong)
-	bs := make([]byte, 8)
-	for i, b := range tmpLong {
-		fmt.Printf("index: %d, byte: %b, key: %d, decodedByte: %d\n", i, b, keys[i], b^byte(keys[i]))
-		bs[i] = b ^ byte(keys[i])
-	}
-	if err := binary.Read(bytes.NewReader(bs), binary.LittleEndian, &decodecFloat); err != nil {
+	//fmt.Printf("payload: %v\n", f.paylod)
+	//tmpLong = f.payload[0:8]
+	//fmt.Printf("tmpLong: %v\n", tmpLong)
+	// bs := make([]byte, 8)
+	// for i, b := range tmpLong {
+	// 	//fmt.Printf("index: %d, byte: %b, key: %d, decodedByte: %d\n", i, b, Keys[f.key][i], b^byte(Keys[f.key][i]))
+	// 	bs[i] = b ^ byte(Keys[f.key][i])
+	// }
+	tmpLong = decryptByteArray(f.payload, 0, 8, f.key)
+	if err := binary.Read(bytes.NewReader(tmpLong), binary.LittleEndian, &decodecFloat); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("decoded: %v, float: %f\n", bs, decodecFloat*180/math.Pi)
+	fmt.Printf("decoded: %v, float: %f\n", tmpLong, decodecFloat*180/math.Pi)
 	//var long float64
 
+	if err := binary.Read(bytes.NewReader(f.payload), binary.LittleEndian, &osd); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("OSD: %+v\n", osd)
+
+	s := reflect.ValueOf(&osd).Elem()
+	//v.NumField()
+	//typeOfT := s.Type()
+
+	for i := 0; i < s.NumField(); i++ {
+		field := s.Field(i)
+		//fmt.Printf("size: %d \n", binary.Size(field.Type()))
+		switch field.Interface().(type) {
+		case float64:
+			//fmt.Printf("float: %f\n", field.Interface())
+			// var buf [8]byte
+			// binary.LittleEndian.PutUint64(buf[:], math.Float64bits(field))
+			var buf bytes.Buffer
+			enc := gob.NewEncoder(&buf)
+			enc.Encode(field.Interface())
+			//fmt.Printf("bytes: %v\n", buf.Bytes())
+			tmpLong2 := decryptByteArray(buf.Bytes(), 4, 12, f.key)
+			if err := binary.Read(bytes.NewReader(tmpLong2), binary.LittleEndian, &decodecFloat2); err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("decoded: %v, float: %f\n", tmpLong2, decodecFloat2*180/math.Pi)
+		}
+		// fmt.Printf("%d: %s %s = %v\n", i,
+		// 	typeOfT.Field(i).Name, field.Type(), field.Interface())
+	}
+}
+
+func decryptByteArray(payload []byte, offset int, length int, keyID uint8) []byte {
+	fmt.Printf("\ndecryptByteArray :: payload: %v, offset: %d, length: %d, keyID: %d\n", payload[offset:length], offset, length, keyID)
+	decrypted := make([]byte, length)
+	for i, b := range payload[offset:length] {
+		//fmt.Printf("i: %d, b: %b\n", i, b)
+		decrypted[i] = b ^ byte(Keys[keyID][i])
+	}
+	return decrypted
 }

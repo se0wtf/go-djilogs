@@ -8,6 +8,8 @@ import (
 	"math"
 	"os"
 	"reflect"
+
+	model "github.com/se0wtf/go-djilogs/model"
 )
 
 var (
@@ -78,37 +80,6 @@ type CenterBattery struct {
 	ConnStatus       int8
 	TotalStudyCycle  int16
 	LastStudyCycle   int16
-}
-
-type OSDRaw struct {
-	Longitude         float64
-	Latitude          float64
-	Heigh             int16
-	XSpeed            int16
-	YSpeed            int16
-	ZSpeed            int16
-	Pitch             int16
-	Rool              int16
-	Yaw               int16
-	RcState           int8
-	AppCommand        int8
-	Info              int32
-	GpsNum            int8
-	FlightAction      int8
-	MotorFailedCause  int8
-	NonGpsCause       int8
-	WaypointLimitMode int8
-	Battery           int8
-	SwaveHeight       int8
-	FlyTime           int16
-	MotorRevolution   int8
-	Useless           int16
-	FlycVersion       int8
-	DroneType         int8
-	IMUinitFailReason int8
-	MotorFailReason   int8
-	Useless2          int8
-	SDKCtrlDevice     int8
 }
 
 type Frame struct {
@@ -247,7 +218,7 @@ func decryptFrame(f Frame) {
 	var decodecFloat float64
 	var decodecFloat2 float64
 	var decodecInt16 int16
-	var osd OSDRaw
+	var osd model.OSDRaw
 	//fmt.Printf("len: %d\n", binary.Size(decodecFloat))
 	//var decoded byte
 	//fmt.Printf("payload: %v\n", f.paylod)
@@ -290,7 +261,7 @@ func decryptFrame(f Frame) {
 			field.SetInt(int64(decodecInt16) / 10)
 		}
 	}
-	fmt.Printf("OSD: %+v\n", osd)
+	fmt.Printf("OSDRaw: %+v\n", osd)
 }
 
 func decryptByteArray(payload []byte, offset int, length int, keyID uint8) []byte {

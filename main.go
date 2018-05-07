@@ -83,7 +83,8 @@ type Frame struct {
 	offset    int64
 	typeID    uint8
 	length    uint8
-	key       uint8
+	bytekey   uint8
+	key       [8]byte
 	payload   []byte
 	encrypted bool
 }
@@ -203,7 +204,12 @@ func isFrame(file *os.File, offset int64, types []string) (Frame, bool) {
 			log.Fatal("binary.Read failed", err)
 		}
 
-		f := Frame{offset: offset, typeID: id, length: length, payload: payload, key: bytekey, encrypted: true}
+		idKey := (int(id-1) * 256) + int(bytekey)
+		if idKey > 4096 {
+			idKey = 0
+		}
+
+		f := Frame{offset: offset, typeID: id, length: length, payload: payload, bytekey: bytekey, key: Keys[idKey], encrypted: true}
 		//fmt.Printf("> offset: %d, frame: %+v\n", offset, f)
 		if offset > 80000 {
 			os.Exit(-1)
@@ -248,14 +254,14 @@ func decryptFrame(f Frame) {
 	//tmpLong = f.payload[0:8]
 	//fmt.Printf("tmpLong: %v\n", tmpLong)
 	if f.typeID == 14 {
-		fmt.Printf("f: %+v\n", f)
+		//fmt.Printf("f: %+v\n", f)
 		decryptedByte := decryptByteArray(f.payload, 0, len(f.payload), f.key)
 		appGps := AppGps{}
-		appGps.Latitude = Float64frombytes(decryptedByte[0:8])
-		appGps.Longitude = Float64frombytes(decryptedByte[8:16])
+		appGps.Longitude = Float64frombytes(decryptedByte[0:8])
+		appGps.Latitude = Float64frombytes(decryptedByte[8:16])
 		appGps.Accuracy = Float32frombytes(decryptedByte[16:20])
-
-		fmt.Printf("AppGps: %+v\n", appGps)
+		fmt.Printf("appGps: %+v\n", appGps)
+		//fmt.Printf("decrypt1: %d, decrypt2: %d, decrypt3: %d\n", decryptedByte[0:8], decryptedByte[8:16], decryptedByte[16:20])
 		// bs := make([]byte, f.length)
 		// for i, b := range f.payload {
 		// 	fmt.Printf("i: %d, b: %d, key: %d\n", i, b, Keys[f.key][i])
@@ -298,10 +304,10 @@ func decryptFrame(f Frame) {
 
 }
 
-func decryptByteArray(payload []byte, offset int, length int, keyID uint8) []byte {
+func decryptByteArray(payload []byte, offset int, length int, key [8]byte) []byte {
 	decrypted := make([]byte, length)
 	for i, b := range payload[offset:length] {
-		decrypted[i] = b ^ byte(Keys[keyID][i%8])
+		decrypted[i] = b ^ byte(key[i%8])
 	}
 	return decrypted
 }

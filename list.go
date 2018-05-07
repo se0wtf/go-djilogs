@@ -1,4 +1,4 @@
-package model
+package main
 
 var DroneType = [...]string{
 	"Unknown",

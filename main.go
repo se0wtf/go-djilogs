@@ -7,9 +7,6 @@ import (
 	"log"
 	"math"
 	"os"
-	"reflect"
-
-	model "github.com/se0wtf/go-djilogs/model"
 )
 
 var (
@@ -149,12 +146,17 @@ func main() {
 	}
 
 	//1433907
-	fmt.Printf("Longitude: %f\n", details.Longitude)
-	fmt.Printf("Latitude: %f\n", details.Latitude)
+	// fmt.Printf("Longitude: %f\n", details.Longitude)
+	// fmt.Printf("Latitude: %f\n", details.Latitude)
 
 	for offset < detailsAddr {
-		isFrame(file, int64(offset), types)
-		offset++
+		f, created := isFrame(file, int64(offset), types)
+		if created {
+			offset = int32(f.offset + int64(f.length) + 1 + 2)
+			decryptFrame(f)
+		} else {
+			offset++
+		}
 	}
 }
 
@@ -168,7 +170,7 @@ func readNextBytes(file *os.File, offset int64, length int) []byte {
 	return bytes
 }
 
-func isFrame(file *os.File, offset int64, types []string) Frame {
+func isFrame(file *os.File, offset int64, types []string) (Frame, bool) {
 	var id uint8
 	var length uint8
 	var end uint8
@@ -189,7 +191,7 @@ func isFrame(file *os.File, offset int64, types []string) Frame {
 		log.Fatal("binary.Read failed", err)
 	}
 
-	if id != 0 && end == 255 && types[id] != "" {
+	if id != 0 && end == 0xFF {
 		payload := make([]byte, length)
 		err = binary.Read(bytes.NewBuffer(readNextBytes(file, offset+3, int(length))), binary.LittleEndian, &payload)
 		if err != nil {
@@ -202,72 +204,116 @@ func isFrame(file *os.File, offset int64, types []string) Frame {
 		}
 
 		f := Frame{offset: offset, typeID: id, length: length, payload: payload, key: bytekey, encrypted: true}
-		if offset == 758928 {
-			//fmt.Printf("> offset: %d, offsetEnd: %d, id: %d, length: %d, end: %d, type: %s\n", offset, offset+2+int64(length), id, int(length), end, types[id])
-			fmt.Printf("> offset: %d, frame: %+v\n", offset, f)
-			decryptFrame(f)
+		//fmt.Printf("> offset: %d, frame: %+v\n", offset, f)
+		if offset > 80000 {
+			os.Exit(-1)
 		}
-		return f
+		// offset = 79938
+		// if offset == 79938 {
+		// 	decryptFrame(f)
+		// }
+
+		//offset == 758928 ||
+		// if f.typeID == 7 {
+		// 	//fmt.Printf("> offset: %d, offsetEnd: %d, id: %d, length: %d, end: %d, type: %s\n", offset, offset+2+int64(length), id, int(length), end, types[id])
+		// 	fmt.Printf("> offset: %d, frame: %+v\n", offset, f)
+		// 	decryptFrame(f)
+		// }
+		return f, true
 	}
-	return Frame{}
+	return Frame{}, false
 }
 
 // byteKey: 96, key: 211,100,182,13,217,83,205,34, id: 096, dataOffset: 758931, dataLength: 55
 func decryptFrame(f Frame) {
-	var tmpLong []byte
-	var decodecFloat float64
-	var decodecFloat2 float64
-	var decodecInt16 int16
-	var osd model.OSDRaw
+	// var tmpLong []byte
+	// var decodecFloat float64
+	// var decodecFloat2 float64
+	// var decodecInt16 int16
+	// var osd model.OSDRaw
+	// CenterBatteryRaw
+	// var raw AppGpsRaw
+	// switch f.typeID {
+	// case 14:
+	// 	//var decoded [12]byte
+	// 	if err := binary.Read(bytes.NewReader(f.payload), binary.LittleEndian, &raw); err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// 	fmt.Printf("Raw: %+v\n", raw)
+	// }
+
 	//fmt.Printf("len: %d\n", binary.Size(decodecFloat))
 	//var decoded byte
 	//fmt.Printf("payload: %v\n", f.paylod)
 	//tmpLong = f.payload[0:8]
 	//fmt.Printf("tmpLong: %v\n", tmpLong)
-	// bs := make([]byte, 8)
-	// for i, b := range tmpLong {
-	// 	//fmt.Printf("index: %d, byte: %b, key: %d, decodedByte: %d\n", i, b, Keys[f.key][i], b^byte(Keys[f.key][i]))
-	// 	bs[i] = b ^ byte(Keys[f.key][i])
+	if f.typeID == 14 {
+		fmt.Printf("f: %+v\n", f)
+		decryptedByte := decryptByteArray(f.payload, 0, len(f.payload), f.key)
+		appGps := AppGps{}
+		appGps.Latitude = Float64frombytes(decryptedByte[0:8])
+		appGps.Longitude = Float64frombytes(decryptedByte[8:16])
+		appGps.Accuracy = Float32frombytes(decryptedByte[16:20])
+
+		fmt.Printf("AppGps: %+v\n", appGps)
+		// bs := make([]byte, f.length)
+		// for i, b := range f.payload {
+		// 	fmt.Printf("i: %d, b: %d, key: %d\n", i, b, Keys[f.key][i])
+		// 	//fmt.Printf("index: %d, byte: %b, key: %d, decodedByte: %d\n", i, b, Keys[f.key][i], b^byte(Keys[f.key][i]))
+
+		// 	bs[i] = b ^ byte(Keys[f.key][i])
+		// }
+	}
+	//tmpLong = decryptByteArray(f.payload, 0, 8, f.key)
+
+	// -------- OSD TEST
+	// if err := binary.Read(bytes.NewReader(tmpLong), binary.LittleEndian, &decodecFloat); err != nil {
+	// 	log.Fatal(err)
 	// }
-	tmpLong = decryptByteArray(f.payload, 0, 8, f.key)
-	if err := binary.Read(bytes.NewReader(tmpLong), binary.LittleEndian, &decodecFloat); err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("decoded: %v, float: %f\n", tmpLong, decodecFloat*180/math.Pi)
+	// fmt.Printf("decoded: %v, float: %f\n", tmpLong, decodecFloat*180/math.Pi)
 
-	if err := binary.Read(bytes.NewReader(f.payload), binary.LittleEndian, &osd); err != nil {
-		log.Fatal(err)
-	}
+	// -------- OSD TEST
+	// s := reflect.ValueOf(&osd).Elem()
+	// for i := 0; i < s.NumField(); i++ {
+	// 	field := s.Field(i)
+	// 	switch field.Kind() {
+	// 	case reflect.Float64:
+	// 		buf := make([]byte, 8)
+	// 		binary.LittleEndian.PutUint64(buf, math.Float64bits(field.Float()))
+	// 		tmpLong2 := decryptByteArray(buf, 0, len(buf), f.key)
+	// 		if err := binary.Read(bytes.NewReader(tmpLong2), binary.LittleEndian, &decodecFloat2); err != nil {
+	// 			log.Fatal(err)
+	// 		}
+	// 		field.SetFloat(decodecFloat2 * 180 / math.Pi)
+	// 	case reflect.Int16:
+	// 		buf := make([]byte, 2)
+	// 		binary.LittleEndian.PutUint16(buf, uint16(field.Int()))
+	// 		tmpLong2 := decryptByteArray(buf, 0, len(buf), f.key)
+	// 		if err := binary.Read(bytes.NewReader(tmpLong2), binary.LittleEndian, &decodecInt16); err != nil {
+	// 			log.Fatal(err)
+	// 		}
+	// 		field.SetInt(int64(decodecInt16) / 10)
+	// 	}
+	// }
 
-	s := reflect.ValueOf(&osd).Elem()
-	for i := 0; i < s.NumField(); i++ {
-		field := s.Field(i)
-		switch field.Kind() {
-		case reflect.Float64:
-			buf := make([]byte, 8)
-			binary.LittleEndian.PutUint64(buf, math.Float64bits(field.Float()))
-			tmpLong2 := decryptByteArray(buf, 0, len(buf), f.key)
-			if err := binary.Read(bytes.NewReader(tmpLong2), binary.LittleEndian, &decodecFloat2); err != nil {
-				log.Fatal(err)
-			}
-			field.SetFloat(decodecFloat2 * 180 / math.Pi)
-		case reflect.Int16:
-			buf := make([]byte, 2)
-			binary.LittleEndian.PutUint16(buf, uint16(field.Int()))
-			tmpLong2 := decryptByteArray(buf, 0, len(buf), f.key)
-			if err := binary.Read(bytes.NewReader(tmpLong2), binary.LittleEndian, &decodecInt16); err != nil {
-				log.Fatal(err)
-			}
-			field.SetInt(int64(decodecInt16) / 10)
-		}
-	}
-	fmt.Printf("OSDRaw: %+v\n", osd)
 }
 
 func decryptByteArray(payload []byte, offset int, length int, keyID uint8) []byte {
 	decrypted := make([]byte, length)
 	for i, b := range payload[offset:length] {
-		decrypted[i] = b ^ byte(Keys[keyID][i])
+		decrypted[i] = b ^ byte(Keys[keyID][i%8])
 	}
 	return decrypted
+}
+
+func Float64frombytes(bytes []byte) float64 {
+	bits := binary.LittleEndian.Uint64(bytes)
+	float := math.Float64frombits(bits)
+	return float
+}
+
+func Float32frombytes(bytes []byte) float32 {
+	bits := binary.LittleEndian.Uint32(bytes)
+	float := math.Float32frombits(bits)
+	return float
 }

@@ -218,6 +218,10 @@ func decryptFrame(f Frame) {
 		if len(decryptedByte) >= 53 {
 			createOSD(decryptedByte)
 		}
+	case 2:
+		if len(decryptedByte) >= 46 {
+			createHome(decryptedByte)
+		}
 	case 3:
 		createGimbal(decryptedByte)
 	case 14:

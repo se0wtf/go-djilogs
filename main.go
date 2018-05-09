@@ -212,7 +212,7 @@ func isFrame(file *os.File, offset int64, types []string) (Frame, bool) {
 
 func decryptFrame(f Frame) {
 	decryptedByte := decryptByteArray(f.payload, 0, len(f.payload), f.key)
-	//fmt.Printf("Decrypted: %d\n", decryptedByte)
+
 	switch f.typeID {
 	case 1:
 		if len(decryptedByte) >= 53 {
@@ -224,6 +224,12 @@ func decryptFrame(f Frame) {
 		}
 	case 3:
 		createGimbal(decryptedByte)
+	case 10:
+		createAppMessage(decryptedByte)
+	case 13:
+		if len(decryptedByte) >= 85 {
+			createRecover(decryptedByte)
+		}
 	case 14:
 		if len(decryptedByte) >= 20 {
 			createAppGps(decryptedByte)

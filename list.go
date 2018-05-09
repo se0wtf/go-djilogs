@@ -25,6 +25,22 @@ var DroneType = [...]string{
 	255: "NoFlyc",
 }
 
+var RecoverDroneType = [...]string{
+	0:   "Unknown",
+	1:   "Inspire",
+	2:   "P3S",
+	3:   "P3X",
+	4:   "P3C",
+	5:   "OpenFrame",
+	7:   "P4",
+	13:  "Mavic",
+	100: "None"}
+
+var AppType = [...]string{
+	0: "UNKNOWN",
+	1: "IOS",
+	2: "ANDROID"}
+
 var FlycState = [...]string{
 	0:   "MANUAL",
 	1:   "ATTI",

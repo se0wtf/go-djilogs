@@ -37,16 +37,16 @@ type Home struct {
 
 func createHome(decrypted []byte) Home {
 	h := Home{}
-
 	h.Longitude = Float64frombytes(decrypted[0:8]) * 180 / math.Pi
 	h.Latitude = Float64frombytes(decrypted[8:16]) * 180 / math.Pi
 	h.Height = Int32frombytes(decrypted[16:20])
-	if int((Int32frombytes(decrypted[20:22])&57344)>>13) >= len(IocMode) {
-		h.IocMode = "UNKNOWN"
-	} else {
-		h.IocMode = IocMode[(Int32frombytes(decrypted[20:22])&57344)>>13]
-	}
-	h.IsIocEnabled = ((Int32frombytes(decrypted[20:22]) & 57344) >> 13) != 0
+	///TODO
+	// if int((Int16frombytes(decrypted[20:22])&57344)>>13) >= len(IocMode) {
+	// 	h.IocMode = "UNKNOWN"
+	// } else {
+	// 	h.IocMode = IocMode[(Int16frombytes(decrypted[20:22])&57344)>>13]
+	// }
+	// h.IsIocEnabled = ((Int16frombytes(decrypted[20:22]) & 57344) >> 13) != 0
 
 	h.IsBeginnerMode = (Int16frombytes(decrypted[20:22]) >> 11 & 1) != 0
 	h.IsCompassCeleing = ((Int16frombytes(decrypted[20:22]) & 1024) >> 10) != 0

@@ -7,6 +7,8 @@ import (
 	"log"
 	"math"
 	"os"
+
+	"github.com/satori/go.uuid"
 )
 
 var (
@@ -90,7 +92,7 @@ type Frame struct {
 }
 
 func main() {
-	path := "testv3.txt"
+	path := "testair.txt"
 
 	file, err := os.Open(path)
 	if err != nil {
@@ -100,6 +102,8 @@ func main() {
 	fmt.Printf("%s opened\n", path)
 
 	details := Details{}
+	fl := Flight{}
+	fl.Uuid = uuid.Must(uuid.NewV4()).String()
 
 	// init types
 	types := make([]string, 256)
@@ -144,15 +148,24 @@ func main() {
 		log.Fatal("binary.Read failed", err)
 	}
 
+	fl.FlightDate = details.UpdateTime
+	fl.MaxHeight = details.MaxHeight
+	fl.MaxHSpeed = details.MaxHSpeed
+	fl.MaxVSpeed = details.MaxVSpeed
+	fl.TotalDistance = details.TotalDistance
+	fl.TotalTime = details.TotalTime
+
 	for offset < detailsAddr {
 		f, created := isFrame(file, int64(offset), types)
 		if created {
 			offset = int32(f.offset + int64(f.length) + 1 + 2)
-			decryptFrame(f)
+			decryptFrame(f, &fl)
 		} else {
 			offset++
 		}
 	}
+
+	fmt.Printf("Flight: %+v", fl)
 }
 
 func readNextBytes(file *os.File, offset int64, length int) []byte {
@@ -210,7 +223,7 @@ func isFrame(file *os.File, offset int64, types []string) (Frame, bool) {
 	return Frame{}, false
 }
 
-func decryptFrame(f Frame) {
+func decryptFrame(f Frame, fl *Flight) *Flight {
 	decryptedByte := decryptByteArray(f.payload, 0, len(f.payload), f.key)
 
 	switch f.typeID {
@@ -232,11 +245,13 @@ func decryptFrame(f Frame) {
 		}
 	case 14:
 		if len(decryptedByte) >= 20 {
-			createAppGps(decryptedByte)
+			appGps := createAppGps(decryptedByte)
+			fl.Gps = append(fl.Gps, GpsPoint{Latitude: appGps.Latitude, Longitude: appGps.Longitude})
 		}
 
 	}
 
+	return fl
 }
 
 func decryptByteArray(payload []byte, offset int, length int, key [8]byte) []byte {

@@ -1,7 +1,5 @@
 package main
 
-import "fmt"
-
 // AppGps AppGps
 type AppGps struct {
 	Latitude  float64
@@ -14,7 +12,5 @@ func createAppGps(decrypted []byte) AppGps {
 	a.Longitude = Float64frombytes(decrypted[0:8])
 	a.Latitude = Float64frombytes(decrypted[8:16])
 	a.Accuracy = Float32frombytes(decrypted[16:20])
-	fmt.Printf("appGps created: %+v\n", a)
-
 	return a
 }

@@ -1,7 +1,5 @@
 package main
 
-import "fmt"
-
 var GimbalMode = [...]string{
 	"YawNoFollow",
 	"FPV",
@@ -53,6 +51,5 @@ func createGimbal(decrypted []byte) Gimbal {
 	g.IsTripleClick = (Intfrombytes(decrypted[11:12]) & 64) != 0
 	g.IsSingleClick = (Intfrombytes(decrypted[11:12]) & 128) != 0
 
-	fmt.Printf("Gimbal created: %+v\n", g)
 	return g
 }

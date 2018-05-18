@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"math"
 )
 
@@ -162,6 +161,5 @@ func createOSD(decrypted []byte) OSD {
 		osd.SDKCtrlDevice = SdkControlDevice[Intfrombytes(decrypted[52:53])]
 	}
 
-	fmt.Printf("OSD: %+v\n", osd)
 	return osd
 }

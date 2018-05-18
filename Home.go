@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"math"
 )
 
@@ -79,7 +78,5 @@ func createHome(decrypted []byte) Home {
 	//TODO
 	//h.MotorEscmState = Int16frombytes(decrypted[30:32])
 	h.ForceLandingHeight = Intfrombytes(decrypted[45:46])
-
-	fmt.Printf("Home: %+v\n", h)
 	return h
 }

@@ -92,7 +92,8 @@ type Frame struct {
 }
 
 func main() {
-	path := "testair.txt"
+	//path := "testair.txt"
+	path := "testv3.txt"
 
 	file, err := os.Open(path)
 	if err != nil {
@@ -160,12 +161,16 @@ func main() {
 		if created {
 			offset = int32(f.offset + int64(f.length) + 1 + 2)
 			decryptFrame(f, &fl)
+		} else if isImage(file, int64(offset)) {
+			// we check if its an image
+			fmt.Printf("WE GOT AN IMAGE §§§\n")
+			offset++
 		} else {
 			offset++
 		}
 	}
 
-	fmt.Printf("Flight: %+v", fl)
+	fmt.Printf("Flight: %+v\n", fl)
 }
 
 func readNextBytes(file *os.File, offset int64, length int) []byte {
@@ -176,6 +181,16 @@ func readNextBytes(file *os.File, offset int64, length int) []byte {
 	}
 
 	return bytes
+}
+
+func isImage(file *os.File, offset int64) bool {
+	var header uint32
+	err := binary.Read(bytes.NewBuffer(readNextBytes(file, offset, 4)), binary.LittleEndian, &header)
+	if err != nil {
+		log.Fatal("binary.Read failed", err)
+	}
+	// JFIF header 0xFF 0xD8 0xFF 0xE0
+	return header == 3774863615
 }
 
 func isFrame(file *os.File, offset int64, types []string) (Frame, bool) {
@@ -241,7 +256,10 @@ func decryptFrame(f Frame, fl *Flight) *Flight {
 		createAppMessage(decryptedByte)
 	case 13:
 		if len(decryptedByte) >= 85 {
-			createRecover(decryptedByte)
+			recover := createRecover(decryptedByte)
+			if (recover != Recover{}) {
+				fmt.Printf("Recover: %+v\n", recover)
+			}
 		}
 	case 14:
 		if len(decryptedByte) >= 20 {
